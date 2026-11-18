@@ -15,6 +15,7 @@ const providers: Record<string, () => Provider> = {
       "https://api.anthropic.com/v1/",
       process.env.ANTHROPIC_API_KEY!,
       "claude-sonnet-5",
+      
     ),
 };
 

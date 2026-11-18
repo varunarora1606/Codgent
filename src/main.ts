@@ -5,6 +5,22 @@ import { parseArgs } from "node:util";
 import OpenAI from "openai";
 import { getProvider } from "./providers/index.ts";
 import { Message, UserMessage } from "./types.ts";
+import { readTool } from "./tools/read.ts";
+
+const tools = [readTool];
+// Update this, as it is implemented only for readTool
+const SYSTEM_PROMPT = `
+  You are a coding assistant with access to filesystem tools.
+
+Rules:
+1. Use tools only when necessary to fulfill the user's request.
+2. If the user specifies a file path, directly use the read tool.
+3. Never use the read tool to inspect directories.
+4. If a file contains a reference to another file, extract that path
+   and use the read tool to read the referenced file.
+5. Never assume that a directory can be read using the read tool.
+6. If an operation requires an unavailable tool, explain the limitation.
+`;
 
 // load the .env next to the code, so mypi works from any folder
 config({
@@ -31,43 +47,48 @@ const provider = getProvider(values.provider);
 const model = values.model ?? provider.defaultModel;
 const messages: Message[] = [{ role: "user", content: values.prompt }];
 
-for await (const event of provider.stream({ model, messages })) {
-  if (event.type === "text_delta") {
-    process.stdout.write(event.delta);
-  } else {
-    console.log(
-      `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
-    );
+async function callModel() {
+  for await (const event of provider.stream({
+    model,
+    messages,
+    tools,
+    system: SYSTEM_PROMPT,
+  })) {
+    if (event.type === "text_delta") {
+      process.stdout.write(event.delta);
+    } else {
+      console.log(
+        `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
+      );
+      return event.message;
+    }
   }
+  throw new Error("stream ended without a done event");
 }
 
-// const client = new OpenAI({
-//   apiKey: process.env.GROQ_API_KEY,
-//   baseURL: "https://api.groq.com/openai/v1",
-// });
+while (true) {
+  console.dir(messages, { depth: null, colors: true });
+  const response = await callModel();
 
-// const stream = client.chat.completions.stream({
-//     // max_tokens: 1024,
-//     messages: [{role: "user", content: values.prompt}],
-//     model: values.model,
-//     stream: true,
-//     stream_options: {include_usage: true}
-// })
+  if (response.stopReason === "stop") break;
+  if (response.stopReason === "length") {
+    console.log("Model reached token limit");
+    break;
+  }
 
-// let text = ""
-// let usage;
+  messages.push(response);
 
-// for await (const chunk of stream) {
-//     // if (event.choices[0].delta.)
-//     const choice = chunk.choices[0]
-//     if (choice?.delta?.content?) {
-//         text += choice.delta.content
-//         process.stdout.write(text)
-//     }
-//     if (chunk.usage) {
-//         usage = chunk.usage
-//     }
-//     // if (event.type)
-// }
-
-// console.log(usage)
+  for (const block of response.content) {
+    // console.log("block",block);
+    if (block.type === "text") continue;
+    console.log(block.arguments);
+    const result = await readTool.execute(block.arguments);
+    console.log(result);
+    messages.push({
+      role: "toolResult",
+      content: result,
+      toolCallId: block.id,
+      toolName: block.name,
+    });
+  }
+}
