@@ -52,5 +52,6 @@ export interface Provider {
 }
 
 export type Tool = ToolSpec & {
+  readOnly: boolean,
   execute(args: Record<string, unknown>): Promise<string>;
 };

@@ -86,9 +86,15 @@ export const bashTool: Tool = {
         type: "number",
         description: "Timeout in seconds (default 30)",
       },
+      description: {
+        type: "string",
+        description:
+          "Short, plain-language summary of what this command does and why (5-12 words)",
+      },
     },
-    required: ["command"],
+    required: ["command", "description"],
   },
+  readOnly: false,
   async execute(args) {
     const seconds = typeof args.timeout === "number" ? args.timeout : 30;
     return truncateTail(await runBash(String(args.command), seconds * 1000));

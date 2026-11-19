@@ -28,7 +28,7 @@ const providers: Record<string, () => Provider> = {
       "openRouter",
       "https://openrouter.ai/api/v1",
       process.env.OPENROUTER_API_KEY!,
-      "particle-ai/particle-1:free",
+      "openai/gpt-4o-mini",
     ),
 };
 

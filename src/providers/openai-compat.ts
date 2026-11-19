@@ -124,7 +124,7 @@ export function createOpenAiCompat(
         }
 
         // console.log(tc.arguments);
-        const args = JSON.parse(tc.arguments);
+        const args = JSON.parse(tc.arguments || "{}");
         // console.log("args", args);
         content.push({
           type: "tool_call" as const,

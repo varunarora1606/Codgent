@@ -17,6 +17,8 @@ export const readTool: Tool = {
     required: ["path"],
   },
 
+  readOnly: true,
+
   async execute(args) {
     return readFile(resolve(process.cwd(), String(args.path)), "utf-8");
   },

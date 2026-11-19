@@ -21,6 +21,6 @@
     "typescript": "^7.0.2"
   },
   "bin": {
-    "codgent": "bin/mypi.js"
+    "codgent": "bin/codgent.js"
   }
 }
