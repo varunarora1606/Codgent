@@ -3,11 +3,9 @@ import {
   Message,
   Provider,
   StopReason,
-  StreamEvents,
   StreamOptions,
   Usage,
 } from "../types.ts";
-import { FunctionParameters } from "openai/resources";
 
 function toOpenAI(messages: Message[]): OpenAI.ChatCompletionMessageParam[] {
   return messages.map((m): OpenAI.ChatCompletionMessageParam => {
@@ -55,7 +53,9 @@ export function createOpenAiCompat(
       const chat = toOpenAI(opts.messages);
       const stream = await client.chat.completions.create({
         model: opts.model,
-        messages: opts.system ? [{role: "system", content: opts.system}, ...chat] : chat,
+        messages: opts.system
+          ? [{ role: "system", content: opts.system }, ...chat]
+          : chat,
         tools: opts.tools?.length
           ? opts.tools.map((t) => ({
               type: "function" as const,
@@ -134,34 +134,8 @@ export function createOpenAiCompat(
         });
       }
 
-      // if (toolCalls.length > 0 && stopReason === "tool_calls") {
-      //   // Loop here
-      //   if (toolCalls[0].function?.name === "read") {
-      //     const args = toolCalls[0].function?.arguments;
-      //     const path = JSON.parse(args || "");
-      //     // const result = await readTool.execute(path);
-      //     yield {
-      //       type: "done",
-      //       message: {
-      //         content: [
-      //           {
-      //             type: "tool_call",
-      //             id: toolCall[0].id || "",
-      //             name: toolCalls[0].function.name,
-      //             arguments: path,
-      //           },
-      //         ],
-      //         role: "assistant",
-      //         stopReason,
-      //         usage,
-      //       },
-      //     };
-      //   }
-      //   // const result = readTool.execute(toolCall[0].)
-      // }
       yield {
         type: "done",
-        // Here
         message: {
           content: content,
           role: "assistant",

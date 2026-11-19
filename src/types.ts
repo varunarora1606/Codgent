@@ -51,10 +51,6 @@ export interface Provider {
   stream(opts: StreamOptions): AsyncIterable<StreamEvents>;
 }
 
-// export type ReadToolExecuteArg = {
-//   path: string
-// }
-
 export type Tool = ToolSpec & {
   execute(args: Record<string, unknown>): Promise<string>;
 };

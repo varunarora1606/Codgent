@@ -29,10 +29,15 @@ const MAX_LINES = 2000;
 const MAX_BYTES = 50 * 1024;
 
 // keep the END of the output (errors and results are usually at the bottom) and say what was cut
-export function truncateTail(text: string, maxLines = MAX_LINES, maxBytes = MAX_BYTES): string {
+export function truncateTail(
+  text: string,
+  maxLines = MAX_LINES,
+  maxBytes = MAX_BYTES,
+): string {
   const lines = text.split("\n");
   let kept = lines.slice(-maxLines);
-  while (kept.length > 1 && Buffer.byteLength(kept.join("\n")) > maxBytes) kept.shift();
+  while (kept.length > 1 && Buffer.byteLength(kept.join("\n")) > maxBytes)
+    kept.shift();
   let out = kept.join("\n");
   if (Buffer.byteLength(out) > maxBytes) out = out.slice(-maxBytes); // one giant line
   if (kept.length === lines.length && out.length === text.length) return text;
@@ -41,13 +46,17 @@ export function truncateTail(text: string, maxLines = MAX_LINES, maxBytes = MAX_
 
 function runBash(command: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve) => {
-    const child = spawn(findBash(), ["-c", command], { cwd: process.cwd(), windowsHide: true });
+    const child = spawn(findBash(), ["-c", command], {
+      cwd: process.cwd(),
+      windowsHide: true,
+    });
     let out = "";
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (out += d));
     const timer = setTimeout(() => {
       // child.kill() does not kill grandchildren on Windows; taskkill /T kills the whole tree
-      if (process.platform === "win32") spawn("taskkill", ["/F", "/T", "/PID", String(child.pid)]);
+      if (process.platform === "win32")
+        spawn("taskkill", ["/F", "/T", "/PID", String(child.pid)]);
       else child.kill("SIGKILL");
       out += `\n[timed out after ${timeoutMs / 1000}s]`;
     }, timeoutMs);
@@ -64,12 +73,19 @@ function runBash(command: string, timeoutMs: number): Promise<string> {
 
 export const bashTool: Tool = {
   name: "bash",
-  description: "Run a bash command in the current folder. Returns stdout, stderr and the exit code.",
+  description:
+    "Execute a shell command using Bash in the current project directory. " +
+    "Pass the entire command as a single string in the command field. " +
+    "Use this to inspect, create, modify, and run files. " +
+    "Do not pass command arrays or use a cmd field.",
   parameters: {
     type: "object",
     properties: {
       command: { type: "string", description: "The bash command to run" },
-      timeout: { type: "number", description: "Timeout in seconds (default 30)" },
+      timeout: {
+        type: "number",
+        description: "Timeout in seconds (default 30)",
+      },
     },
     required: ["command"],
   },
