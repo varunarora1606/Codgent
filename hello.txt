@@ -1,1 +1,1 @@
-bin/mypi.js
+how are u
