@@ -23,6 +23,7 @@ export type ToolResultMessage = {
   toolCallId: string;
   toolName: string;
   content: string;
+  isError: boolean;
 };
 export type Message = UserMessage | AssistantMessage | ToolResultMessage;
 

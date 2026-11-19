@@ -6,8 +6,10 @@ import OpenAI from "openai";
 import { getProvider } from "./providers/index.ts";
 import { Message, UserMessage } from "./types.ts";
 import { readTool } from "./tools/read.ts";
+import { tools } from "./tools/index.ts";
+import { runAgent } from "./agent/index.ts";
 
-const tools = [readTool];
+// const tools = [readTool];
 // Update this, as it is implemented only for readTool
 const SYSTEM_PROMPT = `
   You are a coding assistant with access to filesystem tools.
@@ -47,48 +49,78 @@ const provider = getProvider(values.provider);
 const model = values.model ?? provider.defaultModel;
 const messages: Message[] = [{ role: "user", content: values.prompt }];
 
-async function callModel() {
-  for await (const event of provider.stream({
-    model,
-    messages,
-    tools,
-    system: SYSTEM_PROMPT,
-  })) {
-    if (event.type === "text_delta") {
-      process.stdout.write(event.delta);
-    } else {
-      console.log(
-        `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
-      );
-      return event.message;
+await runAgent({
+  messages,
+  model,
+  provider,
+  system: SYSTEM_PROMPT,
+  tools,
+  onEvent(event) {
+    switch (event.type) {
+      case "text":
+        process.stdout.write(event.delta);
+        break;
+
+      case "tool_start":
+        console.log("Tool Call: ", event.call.name);
+        break;
+      case "tool_end":
+        event.isError
+          ? console.log("Tool call Failed: ",event.result)
+          : console.log("Tool call Successfully executed: ", event.call.name);
+        break;
+      case "turn_end":
+        console.log(
+          `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
+        );
+      default:
+        break;
     }
-  }
-  throw new Error("stream ended without a done event");
-}
+  },
+});
 
-while (true) {
-  console.dir(messages, { depth: null, colors: true });
-  const response = await callModel();
+// async function callModel() {
+//   for await (const event of provider.stream({
+//     model,
+//     messages,
+//     tools,
+//     system: SYSTEM_PROMPT,
+//   })) {
+//     if (event.type === "text_delta") {
+//       process.stdout.write(event.delta);
+//     } else {
+//       console.log(
+//         `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
+//       );
+//       return event.message;
+//     }
+//   }
+//   throw new Error("stream ended without a done event");
+// }
 
-  if (response.stopReason === "stop") break;
-  if (response.stopReason === "length") {
-    console.log("Model reached token limit");
-    break;
-  }
+// while (true) {
+//   console.dir(messages, { depth: null, colors: true });
+//   const response = await callModel();
 
-  messages.push(response);
+//   if (response.stopReason === "stop") break;
+//   if (response.stopReason === "length") {
+//     console.log("Model reached token limit");
+//     break;
+//   }
 
-  for (const block of response.content) {
-    // console.log("block",block);
-    if (block.type === "text") continue;
-    console.log(block.arguments);
-    const result = await readTool.execute(block.arguments);
-    console.log(result);
-    messages.push({
-      role: "toolResult",
-      content: result,
-      toolCallId: block.id,
-      toolName: block.name,
-    });
-  }
-}
+//   messages.push(response);
+
+//   for (const block of response.content) {
+//     // console.log("block",block);
+//     if (block.type === "text") continue;
+//     console.log(block.arguments);
+//     const result = await readTool.execute(block.arguments);
+//     console.log(result);
+//     messages.push({
+//       role: "toolResult",
+//       content: result,
+//       toolCallId: block.id,
+//       toolName: block.name,
+//     });
+//   }
+// }
