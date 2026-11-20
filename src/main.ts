@@ -79,7 +79,7 @@ const { values } = parseArgs({
     provider: { type: "string", default: "openRouter" },
     model: { type: "string" },
     yolo: { type: "boolean", default: false },
-    continue: { type: "boolean", short: "c" },
+    resume: { type: "boolean", short: "r" },
     session: { type: "string" },
     "list-sessions": { type: "boolean" },
   },
@@ -106,7 +106,7 @@ const messages: Message[] = [];
 
 let session: Session;
 
-if (values.session || values.continue) {
+if (values.session || values.resume) {
   const sessionId = values.session ?? (await listSessions())[0].sessionId;
   if (!sessionId) {
     console.error("No matching session in this folder.");
@@ -124,7 +124,6 @@ if (values.session || values.continue) {
 } else {
   session = await createSession(model, provider.name);
 }
-
 
 const r1 = createInterface({
   input: process.stdin,
@@ -199,7 +198,16 @@ if (values.prompt) {
     if (!prompt) continue;
     if (prompt === "/exit") break;
     if (prompt === "/help") {
-      console.error("/clear  forget the conversation\n/exit   quit");
+      console.error(`
+/help    show available commands
+/clear   start a new session
+/exit    quit Codgent
+
+Session options:
+-r, --resume         resume the latest session
+--session <id>       resume a specific session
+--list-sessions      list saved sessions
+`);
       continue;
     }
 
