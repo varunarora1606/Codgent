@@ -9,6 +9,7 @@ import { readTool } from "./tools/read.ts";
 import { tools } from "./tools/index.ts";
 import { PermissionResult, runAgent } from "./agent/index.ts";
 import { createInterface } from "node:readline/promises";
+import { loadProjectContext } from "./config/project-context.ts";
 
 const SYSTEM_PROMPT = `
 You are Codgent, an autonomous coding agent.
@@ -82,6 +83,13 @@ if (!values.prompt) {
   process.exit(1);
 }
 
+const projectContext = await loadProjectContext(process.cwd())
+const system = [
+  SYSTEM_PROMPT.trim(),
+  `Working directory: ${process.cwd()}\nPlatform: ${process.platform}`,
+  projectContext
+].filter(Boolean).join("\n\n")
+
 const provider = getProvider(values.provider);
 const model = values.model ?? provider.defaultModel;
 let yolo = values.yolo;
@@ -103,7 +111,7 @@ try {
     messages,
     model,
     provider,
-    system: SYSTEM_PROMPT,
+    system,
     tools,
     onEvent(event) {
       switch (event.type) {
