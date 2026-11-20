@@ -24,7 +24,7 @@ export type AgentOptions = {
   messages: Message[];
   tools?: Tool[];
   maxTurns?: number;
-  onEvent: (e: AgentEvent) => void;
+  onEvent: (e: AgentEvent) => Promise<void>;
   canUseTool: (
     t: Tool,
     args: Record<string, unknown>,
@@ -38,9 +38,9 @@ export async function runAgent(opts: AgentOptions) {
 
   for (let i = 1; i <= maxTurn; i++) {
     let assistant: AssistantMessage | undefined;
-    const push = (message: Message) => {
+    const push = async (message: Message) => {
       messages.push(message);
-      onEvent({ type: "message", message });
+      await onEvent({ type: "message", message });
     };
 
     // STREAMING START: Calling LLM and streaming response
@@ -51,7 +51,7 @@ export async function runAgent(opts: AgentOptions) {
       tools,
     })) {
       if (event.type === "text_delta")
-        onEvent({ type: "text", delta: event.delta });
+        await onEvent({ type: "text", delta: event.delta });
       else assistant = event.message;
     }
     // STREAMING END
@@ -59,15 +59,15 @@ export async function runAgent(opts: AgentOptions) {
     if (!assistant) {
       throw new Error("Provider did not returned an assistant message");
     }
-    push(assistant);
-    onEvent({ type: "turn_end", message: assistant });
+    await push(assistant);
+    await onEvent({ type: "turn_end", message: assistant });
 
     if (assistant.stopReason !== "tool_calls") return;
 
     //TOOL CALL START: Calling tools and returning toolResult
     for (const call of assistant.content) {
       if (call.type !== "tool_call") continue;
-      onEvent({ type: "tool_start", call });
+      await onEvent({ type: "tool_start", call });
       let result: string;
       let isError = false;
 
@@ -84,8 +84,8 @@ export async function runAgent(opts: AgentOptions) {
         result = `Error occured during tool call of ${call.name}: ${error}`;
         isError = true;
       }
-      onEvent({ type: "tool_end", call, result, isError });
-      push({
+      await onEvent({ type: "tool_end", call, result, isError });
+      await push({
         role: "toolResult",
         content: result,
         toolCallId: call.id,

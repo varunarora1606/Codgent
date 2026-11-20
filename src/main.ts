@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -9,6 +8,14 @@ import { AgentEvent, runAgent } from "./agent/index.ts";
 import { createInterface } from "node:readline/promises";
 import { loadProjectContext } from "./config/project-context.ts";
 import { makeToolAsk } from "./permissions/prompt.ts";
+import {
+  createSession,
+  listSessions,
+  listSessionSummaries,
+  loadSession,
+  saveMessage,
+} from "./session/store.ts";
+import { Session } from "./session/types.ts";
 
 const SYSTEM_PROMPT = `
 You are Codgent, an autonomous coding agent.
@@ -72,8 +79,16 @@ const { values } = parseArgs({
     provider: { type: "string", default: "openRouter" },
     model: { type: "string" },
     yolo: { type: "boolean", default: false },
+    continue: { type: "boolean", short: "c" },
+    session: { type: "string" },
+    "list-sessions": { type: "boolean" },
   },
 });
+
+if (values["list-sessions"]) {
+  await printSessionSummaries();
+  process.exit(0);
+}
 
 const projectContext = await loadProjectContext(process.cwd());
 const system = [
@@ -86,7 +101,31 @@ const system = [
 
 const provider = getProvider(values.provider);
 const model = values.model ?? provider.defaultModel;
+
 const messages: Message[] = [];
+
+let session: Session;
+
+if (values.session || values.continue) {
+  const sessionId = values.session ?? (await listSessions())[0].sessionId;
+  if (!sessionId) {
+    console.error("No matching session in this folder.");
+    process.exit(1);
+  }
+
+  const found = await loadSession(sessionId);
+  if (!found) {
+    console.error("No matching session in this folder.");
+    process.exit(1);
+  }
+  session = found;
+  messages.push(...session.messages);
+  console.error(`(resumed ${session.id}, ${messages.length} messages)`);
+} else {
+  session = await createSession(model, provider.name);
+}
+
+
 const r1 = createInterface({
   input: process.stdin,
   output: process.stderr,
@@ -97,12 +136,11 @@ const yolo = values.yolo;
 const canUseTool = yolo
   ? async () => ({ behavior: "allow" as const })
   : makeToolAsk(r1);
-const onEvent = (event: AgentEvent) => {
+const onEvent = async (event: AgentEvent) => {
   switch (event.type) {
     case "text":
       process.stdout.write(event.delta);
       break;
-
     case "tool_start":
       console.log("Tool Call: ", event.call.name);
       break;
@@ -110,6 +148,9 @@ const onEvent = (event: AgentEvent) => {
       event.isError
         ? console.log("Tool call Failed: ", event.result)
         : console.log("Tool call Successfully executed: ", event.call.name);
+      break;
+    case "message":
+      await saveMessage(session.id, event.message);
       break;
     case "turn_end":
       console.log(
@@ -122,7 +163,9 @@ const onEvent = (event: AgentEvent) => {
 };
 
 const runTurn = async (prompt: string) => {
-  messages.push({ role: "user", content: prompt });
+  const userMessage: Message = { role: "user", content: prompt };
+  messages.push(userMessage);
+  await saveMessage(session.id, userMessage);
   await runAgent({
     messages,
     model,
@@ -162,6 +205,7 @@ if (values.prompt) {
 
     if (prompt === "/clear") {
       messages.length = 0;
+      session = await createSession(model, provider.name);
       console.error("(history cleared)");
       continue;
     }
@@ -174,3 +218,37 @@ if (values.prompt) {
   }
 }
 r1.close();
+
+async function printSessionSummaries() {
+  const sessionSummaries = await listSessionSummaries();
+  if (sessionSummaries.length === 0) {
+    console.log("\nNo saved sessions yet.\n");
+    return;
+  }
+
+  console.log("\nSaved sessions (last modified first):\n");
+  for (const s of sessionSummaries) {
+    const when = timeAgo(s.mTimeMs);
+    console.log(` id: ${s.id}`);
+    console.log(
+      `     ${when} · ${s.provider}/${s.model} · ${s.messageCount} messages`,
+    );
+    console.log(`     First Prompt: ${s.firstPrompt}\n`);
+  }
+  console.log("Resume with: cogent --session <id>\n");
+}
+
+// Just for beauty
+function timeAgo(mtime: number): string {
+  const diff = Date.now() - mtime;
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} days ago`;
+  if (hours > 0) return `${hours} hours ago`;
+  if (minutes > 0) return `${minutes} minutes ago`;
+  return "Just now";
+}
