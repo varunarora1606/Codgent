@@ -2,14 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import OpenAI from "openai";
 import { getProvider } from "./providers/index.ts";
-import { Message, Tool } from "./types.ts";
-import { readTool } from "./tools/read.ts";
+import { Message } from "./types.ts";
 import { tools } from "./tools/index.ts";
-import { PermissionResult, runAgent } from "./agent/index.ts";
+import { AgentEvent, runAgent } from "./agent/index.ts";
 import { createInterface } from "node:readline/promises";
 import { loadProjectContext } from "./config/project-context.ts";
+import { makeToolAsk } from "./permissions/prompt.ts";
 
 const SYSTEM_PROMPT = `
 You are Codgent, an autonomous coding agent.
@@ -76,97 +75,102 @@ const { values } = parseArgs({
   },
 });
 
-if (!values.prompt) {
-  console.log(
-    `Prompt missing Sir, , codgent -p "prompt" --provider anthropic OR groq`,
-  );
-  process.exit(1);
-}
-
-const projectContext = await loadProjectContext(process.cwd())
+const projectContext = await loadProjectContext(process.cwd());
 const system = [
   SYSTEM_PROMPT.trim(),
   `Working directory: ${process.cwd()}\nPlatform: ${process.platform}`,
-  projectContext
-].filter(Boolean).join("\n\n")
+  projectContext,
+]
+  .filter(Boolean)
+  .join("\n\n");
 
 const provider = getProvider(values.provider);
 const model = values.model ?? provider.defaultModel;
-let yolo = values.yolo;
-const messages: Message[] = [{ role: "user", content: values.prompt }];
+const messages: Message[] = [];
+const r1 = createInterface({
+  input: process.stdin,
+  output: process.stderr,
+});
 
-function describe(tool: Tool, args: Record<string, unknown>) {
-  switch (tool.name) {
-    case "bash":
-      const desc = args.description ? `${args.description}\n` : "";
-      return `${desc} $ ${String(args.command).slice(0, 500)}`;
+const yolo = values.yolo;
 
+const canUseTool = yolo
+  ? async () => ({ behavior: "allow" as const })
+  : makeToolAsk(r1);
+const onEvent = (event: AgentEvent) => {
+  switch (event.type) {
+    case "text":
+      process.stdout.write(event.delta);
+      break;
+
+    case "tool_start":
+      console.log("Tool Call: ", event.call.name);
+      break;
+    case "tool_end":
+      event.isError
+        ? console.log("Tool call Failed: ", event.result)
+        : console.log("Tool call Successfully executed: ", event.call.name);
+      break;
+    case "turn_end":
+      console.log(
+        `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
+      );
+      break;
     default:
       break;
   }
-}
+};
 
-try {
+const runTurn = async (prompt: string) => {
+  messages.push({ role: "user", content: prompt });
   await runAgent({
     messages,
     model,
     provider,
     system,
     tools,
-    onEvent(event) {
-      switch (event.type) {
-        case "text":
-          process.stdout.write(event.delta);
-          break;
-
-        case "tool_start":
-          console.log("Tool Call: ", event.call.name);
-          break;
-        case "tool_end":
-          event.isError
-            ? console.log("Tool call Failed: ", event.result)
-            : console.log("Tool call Successfully executed: ", event.call.name);
-          break;
-        case "turn_end":
-          console.log(
-            `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
-          );
-          break;
-        default:
-          break;
-      }
-    },
-    async canUseTool(tool: Tool, args: Record<string, unknown>): Promise<PermissionResult> {
-      if (yolo === true) return { behavior: "allow" };
-
-      if (!process.stdin.isTTY)
-        return {
-          behavior: "deny",
-          message: "No terminal to ask for permission.",
-        };
-
-      const r1 = createInterface({
-        input: process.stdin,
-        output: process.stderr,
-      });
-      console.error(`\nAllow ${tool.name}?\n${describe(tool, args)}`);
-
-      const answer = (
-        await r1.question("[y]es / [n]o / [a]lways this session > ")
-      )
-        .trim()
-        .toLowerCase();
-      r1.close();
-
-      if (answer === "y") return { behavior: "allow" };
-      else if (answer === "a") {
-        yolo = true;
-        return { behavior: "allow" };
-      } else {
-        return { behavior: "deny", message: "The user denied this action. Ask what they'd like instead." };
-      }
-    },
+    onEvent,
+    canUseTool,
   });
-} catch (error) {
-  console.error("Agent failed:", error);
+};
+
+// Print(one-shot) mode: codgent -p "do X"
+if (values.prompt) {
+  try {
+    await runTurn(values.prompt);
+  } catch (error) {
+    console.error("Agent failed:", error);
+    process.exitCode = 1;
+  }
+} else {
+  // Interactive mode: just run `codgent` (Keep the conversation persistant)
+  console.error("codgent  (type /help for commands, /exit or Ctrl-D to quit)");
+  while (true) {
+    let prompt: string;
+    try {
+      prompt = (await r1.question(`\n> `)).trim();
+    } catch (error) {
+      break;
+    }
+
+    if (!prompt) continue;
+    if (prompt === "/exit") break;
+    if (prompt === "/help") {
+      console.error("/clear  forget the conversation\n/exit   quit");
+      continue;
+    }
+
+    if (prompt === "/clear") {
+      messages.length = 0;
+      console.error("(history cleared)");
+      continue;
+    }
+
+    try {
+      await runTurn(prompt);
+    } catch (error) {
+      console.error("Agent failed:", error);
+    }
+  }
 }
+r1.close();
