@@ -6,7 +6,7 @@ import { Message } from "./types.ts";
 import { tools } from "./tools/index.ts";
 import { AgentEvent, runAgent } from "./agent/index.ts";
 import { createInterface } from "node:readline/promises";
-import { loadProjectContext } from "./config/project-context.ts";
+import { buildSystemPrompt } from "./config/system-prompt.ts";
 import { makeToolAsk } from "./permissions/prompt.ts";
 import {
   createSession,
@@ -16,56 +16,6 @@ import {
   saveMessage,
 } from "./session/store.ts";
 import { Session } from "./session/types.ts";
-
-const SYSTEM_PROMPT = `
-You are Codgent, an autonomous coding agent.
-
-Your job is to understand the user's request, inspect the codebase,
-make the required changes, and verify that the changes work.
-
-## Available tools
-
-You have access to the following tools:
-
-- read: Read existing files.
-- bash: Execute shell commands. You can use it to inspect directories,
-  create files, modify files, delete files, and run development commands.
-
-Use the tools available to you to complete tasks.
-Do not claim that you cannot create or modify files.
-
-## Working instructions
-
-1. Understand the task before making changes.
-2. Inspect relevant existing files before modifying anything.
-3. Follow the existing project structure, coding style, and architecture.
-4. Prefer modifying existing code over unnecessarily creating duplicate code.
-5. When implementing features, make actual changes to the filesystem.
-6. Do not just generate code in your response for the user to copy.
-7. Do not create unnecessary files or dependencies.
-8. If something fails, inspect the error and try to fix it.
-9. Run appropriate tests or type checks after making changes.
-10. Do not claim something works unless you have verified it.
-
-## Tool usage
-
-- Use read for reading file contents.
-- Never use read on a directory.
-- Use bash for listing directories and inspecting the project structure.
-- Use bash when you need to create, modify, or delete files.
-- Do not assume a tool exists unless it is actually available.
-- If a tool call fails, understand why before retrying.
-
-## Communication
-
-- Be concise and technical.
-- Explain important implementation decisions.
-- Report which files you created or modified.
-- Mention tests and checks performed.
-- If you cannot complete something, clearly explain what is blocking you.
-
-Your priority is to complete the requested task, not merely describe how it could be done.
-`;
 
 // load the .env next to the code, so mypi works from any folder
 config({
@@ -90,21 +40,14 @@ if (values["list-sessions"]) {
   process.exit(0);
 }
 
-const projectContext = await loadProjectContext(process.cwd());
-const system = [
-  SYSTEM_PROMPT.trim(),
-  `Working directory: ${process.cwd()}\nPlatform: ${process.platform}`,
-  projectContext,
-]
-  .filter(Boolean)
-  .join("\n\n");
+const system = await buildSystemPrompt()
 
 const provider = getProvider(values.provider);
 const model = values.model ?? provider.defaultModel;
 
 const messages: Message[] = [];
 
-let session: Session;
+let session: Session | null;
 
 if (values.session || values.resume) {
   const sessionId = values.session ?? (await listSessions())[0].sessionId;
@@ -149,6 +92,7 @@ const onEvent = async (event: AgentEvent) => {
         : console.log("Tool call Successfully executed: ", event.call.name);
       break;
     case "message":
+      if (!session) session = await createSession(model, provider.name);
       await saveMessage(session.id, event.message);
       break;
     case "turn_end":
@@ -164,6 +108,7 @@ const onEvent = async (event: AgentEvent) => {
 const runTurn = async (prompt: string) => {
   const userMessage: Message = { role: "user", content: prompt };
   messages.push(userMessage);
+  session = session ?? (await createSession(model, provider.name));
   await saveMessage(session.id, userMessage);
   await runAgent({
     messages,
@@ -213,7 +158,7 @@ Session options:
 
     if (prompt === "/clear") {
       messages.length = 0;
-      session = await createSession(model, provider.name);
+      session = null;
       console.error("(history cleared)");
       continue;
     }
