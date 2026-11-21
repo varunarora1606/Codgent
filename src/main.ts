@@ -17,8 +17,9 @@ import {
   saveMessage,
 } from "./session/store.ts";
 import { Session } from "./session/types.ts";
+import { HELP_TEXT } from "./cli/help.ts";
 
-// load the .env next to the code, so mypi works from any folder
+// load the .env next to the code, so codgent works from any folder
 config({
   path: fileURLToPath(new URL("../.env", import.meta.url)),
   quiet: true,
@@ -31,7 +32,8 @@ const { values } = parseArgs({
     model: { type: "string" },
     yolo: { type: "boolean", default: false },
     resume: { type: "boolean", short: "r" },
-    session: { type: "string" },
+    session: { type: "string", short: "s" },
+    help: { type: "boolean", short: "h" },
     "list-sessions": { type: "boolean" },
     "context-limit": { type: "string" },
   },
@@ -40,7 +42,7 @@ const { values } = parseArgs({
 const contextLimit = Number(values["context-limit"] ?? 100_000);
 if (!Number.isFinite(contextLimit) || contextLimit <= 0) {
   console.error("Context limit must be a positive number.");
-  process.exit(1)
+  process.exit(1);
 }
 
 if (values["list-sessions"]) {
@@ -48,6 +50,10 @@ if (values["list-sessions"]) {
   process.exit(0);
 }
 
+if (values.help) {
+  console.log(HELP_TEXT);
+  process.exit(0);
+}
 
 const system = await buildSystemPrompt();
 
@@ -94,21 +100,22 @@ const onEvent = async (event: AgentEvent) => {
       process.stdout.write(event.delta);
       break;
     case "tool_start":
-      console.log("Tool Call: ", event.call.name);
+      // console.log("Tool Call: ", event.call.name);
       break;
     case "tool_end":
-      event.isError
-        ? console.log("Tool call Failed: ", event.result)
-        : console.log("Tool call Successfully executed: ", event.call.name);
+      // event.isError
+      //   ? console.log("Tool call Failed: ", event.result)
+      //   : console.log("Tool call Successfully executed: ", event.call.name);
       break;
     case "message":
       if (!session) session = await createSession(model, provider.name);
       await saveMessage(session.id, event.message);
       break;
     case "turn_end":
-      console.log(
-        `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
-      );
+      process.stdout.write("\n");
+      // console.log(
+      //   `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
+      // );
       break;
     case "compaction":
       if (!session) session = await createSession(model, provider.name);
@@ -160,19 +167,14 @@ if (values.prompt) {
     if (!prompt) continue;
     if (prompt === "/exit") break;
     if (prompt === "/help") {
-      console.error(`
-/help    show available commands
-/clear   start a new session
-/exit    quit Codgent
-
-Session options:
--r, --resume         resume the latest session
---session <id>       resume a specific session
---list-sessions      list saved sessions
-`);
+      console.error(HELP_TEXT);
+      console.error(
+        `NOW  ${provider.name}/${model} · context limit ${contextLimit} · ` +
+          `permissions: ${yolo ? "yolo (no prompts)" : "ask first"} · ` +
+          `session: ${session?.id ?? "not started yet"}\n`,
+      );
       continue;
     }
-
     if (prompt === "/clear") {
       messages.length = 0;
       session = null;
