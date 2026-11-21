@@ -20,11 +20,14 @@ function getSessionPath(sessionId: string): string {
   return join(getSessionDir(), `${sessionId}.jsonl`);
 }
 
-async function ensureSession() {
+async function ensureSession(): Promise<void> {
   await mkdir(getSessionDir(), { recursive: true });
 }
 
-async function appendEntry(sessionId: string, entry: SessionEntry) {
+async function appendEntry(
+  sessionId: string,
+  entry: SessionEntry,
+): Promise<void> {
   await ensureSession();
   const line = `${JSON.stringify(entry)}\n`;
   await appendFile(getSessionPath(sessionId), line);
@@ -75,7 +78,7 @@ export async function saveMessages(
 export async function SaveCompaction(
   sessionId: string,
   compaction: Compaction,
-) {
+): Promise<void> {
   await appendEntry(sessionId, {
     type: "compaction",
     summary: compaction.summary,
@@ -96,10 +99,11 @@ export async function loadSession(sessionId: string): Promise<Session | null> {
   const sessionInfoEntry = entries.find((e) => e.type === "session_info");
   if (!sessionInfoEntry) return null;
 
-  let messages: Message[] = []
+  let messages: Message[] = [];
   for (const entry of entries) {
-    if(entry.type === "message") messages.push(entry.message)
-    if(entry.type === "compaction") messages = rebuild(entry.summary, messages.slice(-entry.keep))
+    if (entry.type === "message") messages.push(entry.message);
+    if (entry.type === "compaction")
+      messages = rebuild(entry.summary, messages.slice(-entry.keep));
   }
 
   return {
