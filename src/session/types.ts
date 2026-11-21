@@ -8,9 +8,11 @@ export type SessionInfoEntry = {
   provider: string;
 };
 
+export type CompactionEntry = {type: "compaction", summary: string, keep: number}
+
 export type MessageEntry = { type: "message"; message: Message };
 
-export type SessionEntry = SessionInfoEntry | MessageEntry;
+export type SessionEntry = SessionInfoEntry | CompactionEntry | MessageEntry;
 
 export type Session = {
   id: string;

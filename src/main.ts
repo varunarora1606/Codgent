@@ -13,6 +13,7 @@ import {
   listSessions,
   listSessionSummaries,
   loadSession,
+  SaveCompaction,
   saveMessage,
 } from "./session/store.ts";
 import { Session } from "./session/types.ts";
@@ -32,15 +33,23 @@ const { values } = parseArgs({
     resume: { type: "boolean", short: "r" },
     session: { type: "string" },
     "list-sessions": { type: "boolean" },
+    "context-limit": { type: "string" },
   },
 });
+
+const contextLimit = Number(values["context-limit"] ?? 100_000);
+if (!Number.isFinite(contextLimit) || contextLimit <= 0) {
+  console.error("Context limit must be a positive number.");
+  process.exit(1)
+}
 
 if (values["list-sessions"]) {
   await printSessionSummaries();
   process.exit(0);
 }
 
-const system = await buildSystemPrompt()
+
+const system = await buildSystemPrompt();
 
 const provider = getProvider(values.provider);
 const model = values.model ?? provider.defaultModel;
@@ -78,6 +87,7 @@ const yolo = values.yolo;
 const canUseTool = yolo
   ? async () => ({ behavior: "allow" as const })
   : makeToolAsk(r1);
+
 const onEvent = async (event: AgentEvent) => {
   switch (event.type) {
     case "text":
@@ -100,6 +110,12 @@ const onEvent = async (event: AgentEvent) => {
         `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
       );
       break;
+    case "compaction":
+      if (!session) session = await createSession(model, provider.name);
+      await SaveCompaction(session.id, event.compaction);
+      console.error(
+        `\n[compacted: ${event.compaction.before} → ${event.compaction.after} messages]`,
+      );
     default:
       break;
   }
@@ -116,6 +132,7 @@ const runTurn = async (prompt: string) => {
     provider,
     system,
     tools,
+    contextLimit,
     onEvent,
     canUseTool,
   });

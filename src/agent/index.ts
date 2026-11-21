@@ -5,13 +5,15 @@ import {
   Tool,
   ToolCallBlock,
 } from "../types.ts";
+import { compactIfNeeded, Compaction } from "./compaction.ts";
 
 export type AgentEvent =
   | { type: "text"; delta: string }
   | { type: "message"; message: Message }
   | { type: "turn_end"; message: AssistantMessage }
   | { type: "tool_start"; call: ToolCallBlock }
-  | { type: "tool_end"; call: ToolCallBlock; result: string; isError: boolean };
+  | { type: "tool_end"; call: ToolCallBlock; result: string; isError: boolean }
+  | ({ type: "compaction", compaction: Compaction });
 
 export type PermissionResult =
   | { behavior: "deny"; message: string }
@@ -24,20 +26,40 @@ export type AgentOptions = {
   messages: Message[];
   tools?: Tool[];
   maxTurns?: number;
+  contextLimit: number;
   onEvent: (e: AgentEvent) => Promise<void>;
   canUseTool: (
     t: Tool,
     args: Record<string, unknown>,
-  ) => Promise<PermissionResult>
+  ) => Promise<PermissionResult>;
 };
 
 export async function runAgent(opts: AgentOptions) {
-  const { provider, model, messages, system, tools, onEvent, canUseTool } =
-    opts;
+  const {
+    provider,
+    model,
+    messages,
+    system,
+    tools,
+    contextLimit,
+    onEvent,
+    canUseTool,
+  } = opts;
   const maxTurn = opts.maxTurns ?? 20;
 
   for (let i = 1; i <= maxTurn; i++) {
     let assistant: AssistantMessage | undefined;
+
+    const compaction = await compactIfNeeded(
+      messages,
+      contextLimit,
+      provider,
+      model,
+    );
+    if (compaction) {
+      await onEvent({ type: "compaction", compaction });
+    }
+
     const push = async (message: Message) => {
       messages.push(message);
       await onEvent({ type: "message", message });
@@ -95,5 +117,6 @@ export async function runAgent(opts: AgentOptions) {
     }
     //TOOL CALL ENDED
   }
+
   throw new Error(`Maxturns ka ghee khtm`);
 }

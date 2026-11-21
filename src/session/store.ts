@@ -9,6 +9,7 @@ import {
   SessionSummary,
 } from "./types.ts";
 import { Message } from "../types.ts";
+import { Compaction, rebuild } from "../agent/compaction.ts";
 
 // Helper Fxns
 function getSessionDir(): string {
@@ -71,6 +72,17 @@ export async function saveMessages(
   for (const message of messages) await saveMessage(sessionId, message);
 }
 
+export async function SaveCompaction(
+  sessionId: string,
+  compaction: Compaction,
+) {
+  await appendEntry(sessionId, {
+    type: "compaction",
+    summary: compaction.summary,
+    keep: compaction.keep,
+  });
+}
+
 export async function loadSession(sessionId: string): Promise<Session | null> {
   if (!existsSync(getSessionPath(sessionId))) return null;
 
@@ -81,18 +93,20 @@ export async function loadSession(sessionId: string): Promise<Session | null> {
     .filter(Boolean)
     .map((line) => JSON.parse(line) as SessionEntry);
 
-  const infoEntry = entries.find((e) => e.type === "session_info");
-  if (!infoEntry) return null;
+  const sessionInfoEntry = entries.find((e) => e.type === "session_info");
+  if (!sessionInfoEntry) return null;
 
-  const messages = entries
-    .filter((e) => e.type === "message")
-    .map((e) => e.message);
+  let messages: Message[] = []
+  for (const entry of entries) {
+    if(entry.type === "message") messages.push(entry.message)
+    if(entry.type === "compaction") messages = rebuild(entry.summary, messages.slice(-entry.keep))
+  }
 
   return {
-    id: infoEntry.id,
-    createdAt: infoEntry.createdAt,
-    model: infoEntry.model,
-    provider: infoEntry.provider,
+    id: sessionInfoEntry.id,
+    createdAt: sessionInfoEntry.createdAt,
+    model: sessionInfoEntry.model,
+    provider: sessionInfoEntry.provider,
     messages,
   };
 }
@@ -133,5 +147,5 @@ export async function listSessionSummaries(): Promise<SessionSummary[]> {
       firstPrompt: firstText.replace(/\s+/g, " ").slice(0, 60) || "(no prompt)",
     });
   }
-  return summaries
+  return summaries;
 }
