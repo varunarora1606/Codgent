@@ -23,7 +23,7 @@ OPTIONS
 
 TOOLS
   read    reads files, runs without asking
-  bash    runs shell commands, asks first (y / n / a = always this session)
+  bash    runs shell commands, asks first (y / n)
 
 GOOD TO KNOW
 - AGENTS.md or CLAUDE.md in the current folder is loaded as project instructions.

@@ -14,7 +14,7 @@ import {
   listSessions,
   listSessionSummaries,
   loadSession,
-  SaveCompaction,
+  saveCompaction,
   saveMessage,
 } from "./session/store.ts";
 import { Session } from "./session/types.ts";
@@ -29,7 +29,7 @@ config({
 const { values } = parseArgs({
   options: {
     prompt: { type: "string", short: "p" },
-    provider: { type: "string", default: "openRouter" },
+    provider: { type: "string", default: "nvidia" },
     model: { type: "string" },
     yolo: { type: "boolean", default: false },
     resume: { type: "boolean", short: "r" },
@@ -101,12 +101,12 @@ const onEvent = async (event: AgentEvent) => {
       process.stdout.write(event.delta);
       break;
     case "tool_start":
-      // console.log("Tool Call: ", event.call.name);
+      console.log("Tool Call: ", event.call.name);
       break;
     case "tool_end":
-      // event.isError
-      //   ? console.log("Tool call Failed: ", event.result)
-      //   : console.log("Tool call Successfully executed: ", event.call.name);
+      event.isError
+        ? console.log("Tool call Failed: ", event.result)
+        : console.log("Tool call Successfully executed: ", event.call.name);
       break;
     case "message":
       if (!session) session = await createSession(model, provider.name);
@@ -116,13 +116,13 @@ const onEvent = async (event: AgentEvent) => {
       if (event.message.stopReason !== "tool_calls") {
         process.stdout.write("\n");
       }
-      // console.log(
-      //   `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
-      // );
+      console.log(
+        `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
+      );
       break;
     case "compaction":
       if (!session) session = await createSession(model, provider.name);
-      await SaveCompaction(session.id, event.compaction);
+      await saveCompaction(session.id, event.compaction);
       console.error(
         `\n[compacted: ${event.compaction.before} → ${event.compaction.after} messages]`,
       );

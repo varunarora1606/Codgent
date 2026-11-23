@@ -3,7 +3,7 @@ import { Tool } from "../types.ts";
 import { PermissionResult } from "../agent/types.ts";
 
 function describe(tool: Tool, args: Record<string, unknown>) {
-  const description = tool.description;
+  const description = tool.description ?? "";
 
   switch (tool.name) {
     case "Bash": {
@@ -11,19 +11,19 @@ function describe(tool: Tool, args: Record<string, unknown>) {
         ? `\nReason: ${String(args.description)}`
         : "";
 
-      return `${description}${reason}\nCommand:\n$ ${String(args.command).slice(0, 500)}`;
+      return `${reason}\nCommand:\n$ ${String(args.command).slice(0, 500)}`;
     }
 
     case "Edit":
       return (
-        `${description}\nFile: ${String(args.file_path)}\n` +
+        `\nFile: ${String(args.file_path)}\n` +
         `Replace: ${String(args.old_string).slice(0, 300)}\n` +
         `With: ${String(args.new_string).slice(0, 300)}`
       );
 
     case "Write":
       return (
-        `${description}\nFile: ${String(args.file_path)}\n` +
+        `\nFile: ${String(args.file_path)}\n` +
         `Content: ${String(args.content).slice(0, 500)}`
       );
 

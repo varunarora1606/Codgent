@@ -75,7 +75,7 @@ export async function saveMessages(
   for (const message of messages) await saveMessage(sessionId, message);
 }
 
-export async function SaveCompaction(
+export async function saveCompaction(
   sessionId: string,
   compaction: Compaction,
 ): Promise<void> {

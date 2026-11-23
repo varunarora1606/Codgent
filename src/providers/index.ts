@@ -2,6 +2,13 @@ import { Provider } from "../types.ts";
 import { createOpenAiCompat } from "./openai-compat.ts";
 
 const providers: Record<string, () => Provider> = {
+  nvidia: () =>
+    createOpenAiCompat(
+      "nvidia",
+      "https://integrate.api.nvidia.com/v1/",
+      process.env.NVIDIA_API_KEY!,
+      "minimaxai/minimax-m3.1-flash",
+    ),
   groq: () =>
     createOpenAiCompat(
       "groq",
