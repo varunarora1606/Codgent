@@ -31,12 +31,17 @@ export function estimateTokens(messages: Message[]): number {
     if (typeof msg.content === "string")
       // User & ToolResult
       chars += msg.content.length;
-    else
-      // Assistant
+    else {
+      if (!Array.isArray(msg.content)) {
+        console.error("Invalid message content:", JSON.stringify(msg, null, 2));
+        throw new Error(`Invalid content format for ${msg.role} message`);
+      }
+
       for (const c of msg.content) {
         if (c.type === "text") chars += c.text.length;
         else chars += JSON.stringify(c.arguments).length;
       }
+    }
   }
   return Math.ceil(chars / 4);
 }

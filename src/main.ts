@@ -112,7 +112,9 @@ const onEvent = async (event: AgentEvent) => {
       await saveMessage(session.id, event.message);
       break;
     case "turn_end":
-      process.stdout.write("\n");
+      if (event.message.stopReason !== "tool_calls") {
+        process.stdout.write("\n");
+      }
       // console.log(
       //   `\n\n stopReason: ${event.message.stopReason} ... input_usage: ${event.message.usage.input} ... output_event: ${event.message.usage.output}`,
       // );

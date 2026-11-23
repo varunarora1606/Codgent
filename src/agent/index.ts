@@ -14,7 +14,7 @@ export type AgentEvent =
   | { type: "turn_end"; message: AssistantMessage }
   | { type: "tool_start"; call: ToolCallBlock }
   | { type: "tool_end"; call: ToolCallBlock; result: string; isError: boolean }
-  | ({ type: "compaction", compaction: Compaction });
+  | { type: "compaction"; compaction: Compaction };
 
 export type PermissionResult =
   | { behavior: "deny"; message: string }
@@ -91,7 +91,7 @@ export async function runAgent(opts: AgentOptions) {
     for (const call of assistant.content) {
       if (call.type !== "tool_call") continue;
       await onEvent({ type: "tool_start", call });
-      let result: ToolResult = {isError: false, output: ""};
+      let result: ToolResult = { isError: false, output: "" };
       // let isError = false;
 
       try {
@@ -103,12 +103,17 @@ export async function runAgent(opts: AgentOptions) {
             throw new Error(userToolResponse.message);
         }
         result = await tool.execute(call.arguments);
-        if(result.isError) throw new Error(result.output)
+        if (result.isError) throw new Error(result.output);
       } catch (error) {
-        result.output = result.output ?? `Error occured during tool call of ${call.name}: ${error}`;
+        result.output = error instanceof Error ? error.message : String(error);
         result.isError = true;
       }
-      await onEvent({ type: "tool_end", call, result: result.output, isError: result.isError });
+      await onEvent({
+        type: "tool_end",
+        call,
+        result: result.output,
+        isError: result.isError,
+      });
       await push({
         role: "toolResult",
         content: result.output,
