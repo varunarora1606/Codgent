@@ -1,15 +1,34 @@
 import { Interface } from "node:readline/promises";
-import { PermissionResult } from "../agent/index.ts";
 import { Tool } from "../types.ts";
+import { PermissionResult } from "../agent/types.ts";
 
 function describe(tool: Tool, args: Record<string, unknown>) {
+  const description = tool.description;
+
   switch (tool.name) {
-    case "bash":
-      const desc = args.description ? `${args.description}\n` : "";
-      return `${desc} $ ${String(args.command).slice(0, 500)}`;
+    case "Bash": {
+      const reason = args.description
+        ? `\nReason: ${String(args.description)}`
+        : "";
+
+      return `${description}${reason}\nCommand:\n$ ${String(args.command).slice(0, 500)}`;
+    }
+
+    case "Edit":
+      return (
+        `${description}\nFile: ${String(args.file_path)}\n` +
+        `Replace: ${String(args.old_string).slice(0, 300)}\n` +
+        `With: ${String(args.new_string).slice(0, 300)}`
+      );
+
+    case "Write":
+      return (
+        `${description}\nFile: ${String(args.file_path)}\n` +
+        `Content: ${String(args.content).slice(0, 500)}`
+      );
 
     default:
-      break;
+      return description;
   }
 }
 
@@ -19,7 +38,6 @@ export const makeToolAsk =
     tool: Tool,
     args: Record<string, unknown>,
   ): Promise<PermissionResult> => {
-
     if (!process.stdin.isTTY)
       return {
         behavior: "deny",
