@@ -1,5 +1,5 @@
 import { Tool } from "../types.ts";
-
+import { ToolResult } from "./types.ts";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -19,7 +19,10 @@ export const readTool: Tool = {
 
   readOnly: true,
 
-  async execute(args) {
-    return readFile(resolve(process.cwd(), String(args.path)), "utf-8");
+  async execute(args): Promise<ToolResult> {
+    return {
+      output: await readFile(resolve(process.cwd(), String(args.path)), "utf-8"),
+      isError: false,
+    };
   },
 };

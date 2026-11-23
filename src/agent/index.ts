@@ -1,3 +1,4 @@
+import { ToolResult } from "../tools/types.ts";
 import {
   AssistantMessage,
   Message,
@@ -90,8 +91,8 @@ export async function runAgent(opts: AgentOptions) {
     for (const call of assistant.content) {
       if (call.type !== "tool_call") continue;
       await onEvent({ type: "tool_start", call });
-      let result: string;
-      let isError = false;
+      let result: ToolResult = {isError: false, output: ""};
+      // let isError = false;
 
       try {
         const tool = tools?.find((t) => t.name === call.name);
@@ -102,17 +103,18 @@ export async function runAgent(opts: AgentOptions) {
             throw new Error(userToolResponse.message);
         }
         result = await tool.execute(call.arguments);
+        if(result.isError) throw new Error(result.output)
       } catch (error) {
-        result = `Error occured during tool call of ${call.name}: ${error}`;
-        isError = true;
+        result.output = result.output ?? `Error occured during tool call of ${call.name}: ${error}`;
+        result.isError = true;
       }
-      await onEvent({ type: "tool_end", call, result, isError });
+      await onEvent({ type: "tool_end", call, result: result.output, isError: result.isError });
       await push({
         role: "toolResult",
-        content: result,
+        content: result.output,
         toolCallId: call.id,
         toolName: call.name,
-        isError,
+        isError: result.isError,
       });
     }
     //TOOL CALL ENDED

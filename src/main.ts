@@ -150,7 +150,8 @@ if (values.prompt) {
   try {
     await runTurn(values.prompt);
   } catch (error) {
-    console.error("Agent failed:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Agent failed:", message);
     process.exitCode = 1;
   }
 } else {
@@ -185,7 +186,8 @@ if (values.prompt) {
     try {
       await runTurn(prompt);
     } catch (error) {
-      console.error("Agent failed:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Agent failed:", message);
     }
   }
 }

@@ -1,3 +1,5 @@
+import { ToolResult } from "./tools/types.ts";
+
 export type Usage = { input: number; output: number };
 export type StopReason = "length" | "stop" | "tool_calls";
 
@@ -52,6 +54,6 @@ export interface Provider {
 }
 
 export type Tool = ToolSpec & {
-  readOnly: boolean,
-  execute(args: Record<string, unknown>): Promise<string>;
+  readOnly?: boolean,
+  execute(args: Record<string, unknown>): Promise<ToolResult>;
 };
